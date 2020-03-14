@@ -212,7 +212,7 @@ impl InlineFormattingContext {
         containing_block: &ContainingBlock,
         tree_rank: usize,
     ) -> FlowLayout {
-        let mut ifc = InlineFormattingContextState {
+        let ifc = InlineFormattingContextState {
             positioning_context,
             containing_block,
             partial_inline_boxes_stack: Vec::new(),
@@ -228,16 +228,24 @@ impl InlineFormattingContext {
                 max_block_size_of_fragments_so_far: Length::zero(),
             },
         };
+        self.layout_nesting_level(layout_context, tree_rank, ifc)
+    }
+
+    fn layout_nesting_level(
+        &self,
+        layout_context: &LayoutContext,
+        tree_rank: usize,
+        mut ifc: InlineFormattingContextState,
+    ) -> FlowLayout {
         loop {
             if let Some(child) = ifc.current_nesting_level.remaining_boxes.next() {
-                match &*child.borrow() {
-                    InlineLevelBox::InlineBox(inline) => {
-                        let partial = inline.start_layout(&mut ifc);
-                        ifc.partial_inline_boxes_stack.push(partial)
+                match *child.borrow() {
+                    InlineLevelBox::InlineBox(ref inline) => {
+                        return inline.start_layout(self, layout_context, tree_rank, ifc);
                     },
-                    InlineLevelBox::TextRun(run) => run.layout(layout_context, &mut ifc),
-                    InlineLevelBox::Atomic(a) => layout_atomic(layout_context, &mut ifc, a),
-                    InlineLevelBox::OutOfFlowAbsolutelyPositionedBox(box_) => {
+                    InlineLevelBox::TextRun(ref run) => run.layout(layout_context, &mut ifc),
+                    InlineLevelBox::Atomic(ref a) => layout_atomic(layout_context, &mut ifc, a),
+                    InlineLevelBox::OutOfFlowAbsolutelyPositionedBox(ref box_) => {
                         let initial_start_corner =
                             match Display::from(box_.contents.style.get_box().original_display) {
                                 Display::GeneratingBox(DisplayGeneratingBox::OutsideInside {
@@ -257,7 +265,8 @@ impl InlineFormattingContext {
                                     panic!("display:none does not generate an abspos box")
                                 },
                             };
-                        let hoisted_fragment = box_.to_hoisted(initial_start_corner, tree_rank);
+                        let hoisted_fragment =
+                            box_.clone().to_hoisted(initial_start_corner, tree_rank);
                         let hoisted_fragment_id = hoisted_fragment.fragment_id;
                         ifc.positioning_context.push(hoisted_fragment);
                         ifc.lines
@@ -266,7 +275,7 @@ impl InlineFormattingContext {
                                 AbsoluteOrFixedPositionedFragment(hoisted_fragment_id),
                             ));
                     },
-                    InlineLevelBox::OutOfFlowFloatBox(_box_) => {
+                    InlineLevelBox::OutOfFlowFloatBox(ref _box_) => {
                         // TODO
                     },
                 }
@@ -282,7 +291,7 @@ impl InlineFormattingContext {
             } else {
                 ifc.lines.finish_line(
                     &mut ifc.current_nesting_level,
-                    containing_block,
+                    ifc.containing_block,
                     ifc.inline_position,
                 );
                 return FlowLayout {
@@ -366,8 +375,11 @@ impl Lines {
 impl InlineBox {
     fn start_layout<'box_tree>(
         &'box_tree self,
-        ifc: &mut InlineFormattingContextState<'box_tree, '_, '_>,
-    ) -> PartialInlineBoxFragment<'box_tree> {
+        inline_formatting_context: &InlineFormattingContext,
+        layout_context: &LayoutContext,
+        tree_rank: usize,
+        mut ifc: InlineFormattingContextState<'box_tree, '_, '_>,
+    ) -> FlowLayout {
         let style = self.style.clone();
         let cbis = ifc.containing_block.inline_size;
         let mut padding = style.padding().percentages_relative_to(cbis);
@@ -390,7 +402,7 @@ impl InlineBox {
         if style.clone_position().is_relative() {
             start_corner += &relative_adjustement(&style, ifc.containing_block)
         }
-        PartialInlineBoxFragment {
+        let new_partial_inline_box_fragment = PartialInlineBoxFragment {
             tag: self.tag,
             style,
             start_corner,
@@ -407,7 +419,21 @@ impl InlineBox {
                     max_block_size_of_fragments_so_far: Length::zero(),
                 },
             ),
-        }
+        };
+
+        let mut partial_inline_boxes_stack = ifc.partial_inline_boxes_stack;
+        partial_inline_boxes_stack.push(new_partial_inline_box_fragment);
+
+        let new_inline_formatting_context_state = InlineFormattingContextState {
+            partial_inline_boxes_stack,
+            ..ifc
+        };
+
+        inline_formatting_context.layout_nesting_level(
+            layout_context,
+            tree_rank,
+            new_inline_formatting_context_state,
+        )
     }
 }
 
@@ -461,10 +487,10 @@ impl<'box_tree> PartialInlineBoxFragment<'box_tree> {
     }
 }
 
-fn layout_atomic<'box_tree>(
+fn layout_atomic<'box_tree, 'context>(
     layout_context: &LayoutContext,
     ifc: &mut InlineFormattingContextState<'box_tree, '_, '_>,
-    atomic: &'box_tree IndependentFormattingContext,
+    atomic: &'context IndependentFormattingContext,
 ) {
     let cbis = ifc.containing_block.inline_size;
     let padding = atomic.style.padding().percentages_relative_to(cbis);
