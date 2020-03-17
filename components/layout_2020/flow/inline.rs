@@ -60,7 +60,7 @@ pub(crate) struct TextRun {
 }
 
 struct InlineNestingLevelState<'box_tree> {
-    remaining_boxes: std::slice::Iter<'box_tree, ArcRefCell<InlineLevelBox>>,
+    remaining_boxes: InlineBoxChildIter<'box_tree>,
     fragments_so_far: Vec<Fragment>,
     inline_start: Length,
     max_block_size_of_fragments_so_far: Length,
@@ -212,7 +212,7 @@ impl InlineFormattingContext {
         containing_block: &ContainingBlock,
         tree_rank: usize,
     ) -> FlowLayout {
-        let ifc = InlineFormattingContextState {
+        let mut ifc = InlineFormattingContextState {
             positioning_context,
             containing_block,
             partial_inline_boxes_stack: Vec::new(),
@@ -222,26 +222,18 @@ impl InlineFormattingContext {
             },
             inline_position: Length::zero(),
             current_nesting_level: InlineNestingLevelState {
-                remaining_boxes: self.inline_level_boxes.iter(),
+                remaining_boxes: InlineBoxChildIter::from_formatting_context(self),
                 fragments_so_far: Vec::with_capacity(self.inline_level_boxes.len()),
                 inline_start: Length::zero(),
                 max_block_size_of_fragments_so_far: Length::zero(),
             },
         };
-        self.layout_nesting_level(layout_context, tree_rank, ifc)
-    }
 
-    fn layout_nesting_level(
-        &self,
-        layout_context: &LayoutContext,
-        tree_rank: usize,
-        mut ifc: InlineFormattingContextState,
-    ) -> FlowLayout {
         loop {
             if let Some(child) = ifc.current_nesting_level.remaining_boxes.next() {
                 match *child.borrow() {
                     InlineLevelBox::InlineBox(ref inline) => {
-                        return inline.start_layout(self, layout_context, tree_rank, ifc);
+                        ifc = inline.start_layout(child.clone(), ifc);
                     },
                     InlineLevelBox::TextRun(ref run) => run.layout(layout_context, &mut ifc),
                     InlineLevelBox::Atomic(ref a) => layout_atomic(layout_context, &mut ifc, a),
@@ -373,13 +365,11 @@ impl Lines {
 }
 
 impl InlineBox {
-    fn start_layout<'box_tree>(
-        &'box_tree self,
-        inline_formatting_context: &InlineFormattingContext,
-        layout_context: &LayoutContext,
-        tree_rank: usize,
-        mut ifc: InlineFormattingContextState<'box_tree, '_, '_>,
-    ) -> FlowLayout {
+    fn start_layout<'a, 'b, 'c>(
+        &self,
+        this: ArcRefCell<InlineLevelBox>,
+        mut ifc: InlineFormattingContextState<'a, 'b, 'c>,
+    ) -> InlineFormattingContextState<'a, 'b, 'c> {
         let style = self.style.clone();
         let cbis = ifc.containing_block.inline_size;
         let mut padding = style.padding().percentages_relative_to(cbis);
@@ -413,7 +403,7 @@ impl InlineBox {
             parent_nesting_level: std::mem::replace(
                 &mut ifc.current_nesting_level,
                 InlineNestingLevelState {
-                    remaining_boxes: self.children.iter(),
+                    remaining_boxes: InlineBoxChildIter::from_box(this),
                     fragments_so_far: Vec::with_capacity(self.children.len()),
                     inline_start: ifc.inline_position,
                     max_block_size_of_fragments_so_far: Length::zero(),
@@ -424,16 +414,10 @@ impl InlineBox {
         let mut partial_inline_boxes_stack = ifc.partial_inline_boxes_stack;
         partial_inline_boxes_stack.push(new_partial_inline_box_fragment);
 
-        let new_inline_formatting_context_state = InlineFormattingContextState {
+        InlineFormattingContextState {
             partial_inline_boxes_stack,
             ..ifc
-        };
-
-        inline_formatting_context.layout_nesting_level(
-            layout_context,
-            tree_rank,
-            new_inline_formatting_context_state,
-        )
+        }
     }
 }
 
@@ -782,6 +766,55 @@ impl TextRun {
                     .finish_line(nesting_level, ifc.containing_block, ifc.inline_position);
                 ifc.inline_position = Length::zero();
             }
+        }
+    }
+}
+
+enum InlineBoxChildIter<'box_tree> {
+    InlineFormattingContext(std::slice::Iter<'box_tree, ArcRefCell<InlineLevelBox>>),
+    InlineBox {
+        inline_level_box: ArcRefCell<InlineLevelBox>,
+        child_index: usize,
+    },
+}
+
+impl<'box_tree> InlineBoxChildIter<'box_tree> {
+    fn from_formatting_context(
+        inline_formatting_context: &'box_tree InlineFormattingContext,
+    ) -> InlineBoxChildIter<'box_tree> {
+        InlineBoxChildIter::InlineFormattingContext(
+            inline_formatting_context.inline_level_boxes.iter(),
+        )
+    }
+
+    fn from_box(inline_level_box: ArcRefCell<InlineLevelBox>) -> InlineBoxChildIter<'box_tree> {
+        InlineBoxChildIter::InlineBox {
+            inline_level_box,
+            child_index: 0,
+        }
+    }
+}
+
+impl<'box_tree> Iterator for InlineBoxChildIter<'box_tree> {
+    type Item = ArcRefCell<InlineLevelBox>;
+    fn next(&mut self) -> Option<ArcRefCell<InlineLevelBox>> {
+        match *self {
+            InlineBoxChildIter::InlineFormattingContext(ref mut iter) => iter.next().cloned(),
+            InlineBoxChildIter::InlineBox {
+                ref inline_level_box,
+                ref mut child_index,
+            } => match *inline_level_box.borrow() {
+                InlineLevelBox::InlineBox(ref inline_box) => {
+                    if *child_index >= inline_box.children.len() {
+                        return None;
+                    }
+
+                    let kid = inline_box.children[*child_index].clone();
+                    *child_index += 1;
+                    Some(kid)
+                },
+                _ => unreachable!(),
+            },
         }
     }
 }
