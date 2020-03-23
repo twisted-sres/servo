@@ -1,11 +1,18 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 use crate::dom::bindings::cell::DomRefCell;
 use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding;
+use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding;
+use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding::ImageBitmapMethods;
 use crate::dom::bindings::root::DomRoot;
 use crate::dom::globalscope::GlobalScope;
+use crate::dom::imagedata::ImageData;
 
 use crate::dom::bindings::callback::ExceptionHandling;
 use crate::dom::bindings::reflector::{reflect_dom_object, Reflector};
-use crate::dom::bindings::error::{Error, Fallible};
+use crate::dom::bindings::error::Fallible;
 use dom_struct::dom_struct;
 use js::jsapi::JSObject;
 use std::vec::Vec;
@@ -15,7 +22,7 @@ pub struct ImageBitmap {
     reflector_: Reflector,
     width: u32,
     height: u32,
-    ibm_vector: DomRefCell<Vec<u8>>,
+    bitmap_data: DomRefCell<Vec<u8>>,
 }
 
 
