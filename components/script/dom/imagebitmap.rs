@@ -8,7 +8,6 @@ use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding;
 use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding::ImageBitmapMethods;
 use crate::dom::bindings::root::DomRoot;
 use crate::dom::globalscope::GlobalScope;
-use crate::dom::imagedata::ImageData;
 
 use crate::dom::bindings::callback::ExceptionHandling;
 use crate::dom::bindings::reflector::{reflect_dom_object, Reflector};

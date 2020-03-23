@@ -6,7 +6,7 @@
  * https://html.spec.whatwg.org/multipage/#imagebitmap
  *
  * © Copyright 2004-2011 Apple Computer, Inc., Mozilla Foundation, and Opera Software ASA.
- * You are granted a license to use, reproduced and create derivative works of this document.
+ * You are granted a license to use, reproduce and create derivative works of this document.
  */
 
 //[Exposed=(Window,Worker), Serializable, Transferable]
