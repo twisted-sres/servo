@@ -4,7 +4,6 @@
 
 use crate::dom::bindings::cell::DomRefCell;
 use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding;
-use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding;
 use crate::dom::bindings::codegen::Bindings::ImageBitmapBinding::ImageBitmapMethods;
 use crate::dom::bindings::root::DomRoot;
 use crate::dom::globalscope::GlobalScope;
