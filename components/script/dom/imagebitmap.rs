@@ -10,8 +10,8 @@ use crate::dom::bindings::root::DomRoot;
 use crate::dom::globalscope::GlobalScope;
 
 use crate::dom::bindings::callback::ExceptionHandling;
-use crate::dom::bindings::reflector::{reflect_dom_object, Reflector};
 use crate::dom::bindings::error::Fallible;
+use crate::dom::bindings::reflector::{reflect_dom_object, Reflector};
 use dom_struct::dom_struct;
 use js::jsapi::JSObject;
 use std::vec::Vec;
@@ -24,7 +24,6 @@ pub struct ImageBitmap {
     bitmap_data: DomRefCell<Vec<u8>>,
 }
 
-
 impl ImageBitmap {
     fn new_inherited(width_arg: u32, height_arg: u32) -> ImageBitmap {
         ImageBitmap {
@@ -35,14 +34,12 @@ impl ImageBitmap {
         }
     }
 
-	#[allow (dead_code)]
+    #[allow(dead_code)]
     pub fn new(global: &GlobalScope, width: u32, height: u32) -> Fallible<DomRoot<ImageBitmap>> {
-		let imagebitmap = Box::new(ImageBitmap::new_inherited(width, height));
+        //assigning to a variable the return object of new_inherited
+        let imagebitmap = Box::new(ImageBitmap::new_inherited(width, height));
 
-        Ok(reflect_dom_object(
-            imagebitmap,
-            global,
-        ))
+        Ok(reflect_dom_object(imagebitmap, global))
     }
 }
 
